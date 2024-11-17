@@ -1,2 +1,4 @@
 # stockmarket
-Stock analysis, market traits, trading strategies, transaction simulations for Chinese A shares.
+Stock analysis, specfic market traits, trading strategies, transaction simulations on Chinese A shares.
+
+Rumminating while retreating in backwoods. 
