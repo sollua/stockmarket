@@ -20,7 +20,7 @@ import java.util.List;
 import org.apache.commons.math3.stat.regression.OLSMultipleLinearRegression;
 import org.apache.commons.io.IOUtils;
 import org.apache.commons.math3.stat.correlation.PearsonsCorrelation;
-
+import org.apache.commons.math3.stat.descriptive.moment.StandardDeviation;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
@@ -66,7 +66,7 @@ public class CorrelationMatrix extends Thread {
 	static List<String> onTheFlyEstimatingAssets;
 	static int noOfPiles = 40;
 	static ArrayList<String>[] piles = new ArrayList[noOfPiles];
-	static LocalDate priceComputeTill;
+	static LocalDate priceComputedTill;
 	private static java.sql.Date maxDateInDailySnapshot;
 	private static double deviationThreshold = -13;
 	private static boolean gaugePerformanceOnly = false;
@@ -83,16 +83,16 @@ public class CorrelationMatrix extends Thread {
 		correlationMatrix = new HashMap<String, Map<String, Double>>();
 	}
 
-	CorrelationMatrix(List<String> assetPile, LocalDate priceComputeTill, List<String> toExclude) {
+	CorrelationMatrix(List<String> assetPile, LocalDate priceComputedTill) {
 		this.assetPile = assetPile;
-		CorrelationMatrix.priceComputeTill = priceComputeTill;
-		this.toExclude = toExclude;
+		CorrelationMatrix.priceComputedTill = priceComputedTill;
+		// CorrelationMatrix.toExclude = listToExclude;
 	}
 
 	CorrelationMatrix() {
 	}
 
-	static double[] extractPriceVector(String assetToExtract, String majorKey, LocalDate priceComputeTill) {
+	static double[] extractPriceVector(String assetToExtract, String majorKey, LocalDate priceComputedTill) {
 		if (assetToExtract != null && majorKey != null) {
 			// System.out.println("inside extractPriceVector() " + "assetToExtract: " +
 			// assetToExtract + ", majorKey: " + majorKey);
@@ -100,12 +100,12 @@ public class CorrelationMatrix extends Thread {
 			Map<java.util.Date, AssetStatus> minorMap = allAssetPricesMappingBasic.get(assetToExtract);
 			List<Date> listMajor = new ArrayList<Date>();
 			for (java.util.Date d : majorMap.keySet()) {
-				if (!d.after(Date.valueOf(priceComputeTill)))
+				if (!d.after(Date.valueOf(priceComputedTill)))
 					listMajor.add((Date) d);
 			}
 			List<Date> listMinor = new ArrayList<Date>();
 			for (java.util.Date d : minorMap.keySet()) {
-				if (!d.after(Date.valueOf(priceComputeTill)))
+				if (!d.after(Date.valueOf(priceComputedTill)))
 					listMinor.add((Date) d);
 			}
 			List<Date> listIntersection = new ArrayList<Date>();
@@ -131,9 +131,9 @@ public class CorrelationMatrix extends Thread {
 		}
 	}
 
-	static double computeCorrelation(String a, String b, LocalDate priceComputeTill, String correlationType) {
-		double[] values1PlainDouble = extractPriceVector(a, b, priceComputeTill);
-		double[] values2PlainDouble = extractPriceVector(b, b, priceComputeTill);
+	static double computeCorrelation(String a, String b, LocalDate priceComputedTill, String correlationType) {
+		double[] values1PlainDouble = extractPriceVector(a, b, priceComputedTill);
+		double[] values2PlainDouble = extractPriceVector(b, b, priceComputedTill);
 
 		if (values1PlainDouble.length == values2PlainDouble.length && values1PlainDouble.length > 1) {
 			if (correlationType.equals("kendall")) {
@@ -148,7 +148,7 @@ public class CorrelationMatrix extends Thread {
 		}
 	}
 
-	static void perserveCorrelationMatrix(String majorKey, Map<String, Double> tinyMap, LocalDate priceComputeTill) {
+	static void perserveCorrelationMatrix(String majorKey, Map<String, Double> tinyMap, LocalDate priceComputedTill) {
 		String deviationAssertion = null;
 		String stockName;
 		if (allAssetPricesMappingBasic.get(majorKey).get(ThruBreaker.maxDateInDailySnapshot) == null
@@ -157,7 +157,7 @@ public class CorrelationMatrix extends Thread {
 		} else {
 			stockName = allAssetPricesMappingBasic.get(majorKey).get(ThruBreaker.maxDateInDailySnapshot).stockName;
 		}
-		if (Date.valueOf(priceComputeTill).after(maxDateInDailySnapshot)) {
+		if (Date.valueOf(priceComputedTill).after(maxDateInDailySnapshot)) {
 			deviationAssertion = "insert into matrix_correlation (asset, name, computing_date, component_1,"
 					+ "component_2, component_3, component_4,component_5,component_6, component_7,"
 					+ "component_8, component_9, component_10, component_1_corrCoefficient,"
@@ -167,7 +167,7 @@ public class CorrelationMatrix extends Thread {
 					+ "beta_0, beta_1, beta_2, beta_3, beta_4, beta_5, beta_6, beta_7,"
 					+ "beta_8, beta_9, beta_10, estimate_upToComputeDate, residual_upToComputeDate,"
 					+ "price_upToComputeDate, price_estimate_deviation, price_estimate_deviation_numeric, realtime"
-					+ ") values " + "('" + majorKey + "', '" + stockName + "', '" + priceComputeTill + "' , ";
+					+ ") values " + "('" + majorKey + "', '" + stockName + "', '" + priceComputedTill + "' , ";
 		} else {
 			deviationAssertion = "insert into matrix_correlation (asset, name, computing_date," + "component_1,"
 					+ "component_2," + "component_3," + "component_4," + "component_5," + "component_6,"
@@ -179,14 +179,14 @@ public class CorrelationMatrix extends Thread {
 					+ "beta_5," + "beta_6," + "beta_7," + "beta_8," + "beta_9," + "beta_10,"
 					+ "estimate_upToComputeDate," + "residual_upToComputeDate," + "price_upToComputeDate,"
 					+ "price_estimate_deviation, " + "price_estimate_deviation_numeric" + ") values " + "('" + majorKey
-					+ "', '" + stockName + "', '" + priceComputeTill + "' , ";
+					+ "', '" + stockName + "', '" + priceComputedTill + "' , ";
 		}
 		List<AssetCorrelations> assetCorrelationCoefficients;
 		assetCorrelationCoefficients = new LinkedList<AssetCorrelations>();
 		for (String minorKey : tinyMap.keySet()) {
 			assetCorrelationCoefficients.add(new AssetCorrelations(minorKey, tinyMap.get(minorKey)));
 		}
-		System.out.println(majorKey + "'s insertion sql is: " + deviationAssertion);
+		System.out.println("correlation matrix routine: " + majorKey + "'s insertion sql is: " + deviationAssertion);
 
 		Collections.sort(assetCorrelationCoefficients, new DescendingOrder());
 		String componentAssetCodeVector[] = new String[10];
@@ -218,15 +218,16 @@ public class CorrelationMatrix extends Thread {
 			deviationAssertion = deviationAssertion.concat("'" + String.valueOf(d.correlationCoefficient) + "',");
 		}
 
-		double[] Y = extractPriceVector(majorKey, majorKey, priceComputeTill);
+		double[] Y = extractPriceVector(majorKey, majorKey, priceComputedTill);
 
 		double[][] X = new double[Y.length][componentAssetCodeVector.length];
 		double tempY[] = null;
 		for (int j = 0; j < componentAssetCodeVector.length; j++) {
-			tempY = extractPriceVector(componentAssetCodeVector[j], majorKey, priceComputeTill);
-			System.out.println("assetToEstimate: " + majorKey);
-			System.out.println(componentAssetCodeVector[j]);
-			System.out.println(componentAssetCodeVector[j] + "'s k(tempY.length): " + tempY.length);
+			tempY = extractPriceVector(componentAssetCodeVector[j], majorKey, priceComputedTill);
+			System.out.println("correlation matrix routine: assetToEstimate :" + majorKey);
+			System.out.println("correlation matrix routine: " + componentAssetCodeVector[j]);
+			System.out.println("correlation matrix routine: " + componentAssetCodeVector[j] + "'s k(tempY.length): "
+					+ tempY.length);
 			for (int k = 0; k < tempY.length; k++) {
 				X[k][j] = tempY[k];
 			}
@@ -240,12 +241,12 @@ public class CorrelationMatrix extends Thread {
 				| org.apache.commons.math3.exception.NoDataException singularOrNoDataEx) {
 			throw singularOrNoDataEx;
 		}
-		System.out.println("beta: ");
+		System.out.println("correlation matrix routine: (betas) ");
 		for (i = 0; i < beta.length; i++) {
 			deviationAssertion = deviationAssertion.concat("'" + String.valueOf(beta[i]) + "', ");
-			System.out.println(beta[i]);
+			System.out.println("correlation matrix routine: " + beta[i]);
 		}
-		System.out.println(majorKey + "'s insertion sql is: " + deviationAssertion);
+		System.out.println("correlation matrix routine: " + majorKey + "'s insertion sql is: " + deviationAssertion);
 
 		double[] residuals = ols.estimateResiduals();
 		double YHat[] = new double[Y.length];
@@ -267,52 +268,50 @@ public class CorrelationMatrix extends Thread {
 		 * beta[i]; } else { YHat[YHat.length - 1] = YHat[YHat.length - 1] + beta[i] *
 		 * X[YHat.length - 1][i - 1]; } }
 		 */
-		System.out.println(majorKey + "'s last YHat(estimation): " + (YHat[YHat.length - 1]));
-		System.out.println(majorKey + "'s insertion sql is: " + deviationAssertion);
+		System.out.println(
+				"correlation matrix routine: " + majorKey + "'s last YHat(estimation): " + (YHat[YHat.length - 1]));
+		System.out.println("correlation matrix routine: " + majorKey + "'s insertion sql is: " + deviationAssertion);
 		double priceToEstimateDeviation;
 		i = 0;
-		if (allAssetPricesMappingBasic.get(majorKey).get(Date.valueOf(priceComputeTill)) != null) {
+		if (allAssetPricesMappingBasic.get(majorKey).get(Date.valueOf(priceComputedTill)) != null) {
 			priceToEstimateDeviation = (residuals[residuals.length - 1])
-					/ allAssetPricesMappingBasic.get(majorKey).get(Date.valueOf(priceComputeTill)).closePrice * 100;
+					/ allAssetPricesMappingBasic.get(majorKey).get(Date.valueOf(priceComputedTill)).closePrice * 100;
 			deviationAssertion = deviationAssertion
 					.concat("'" + YHat[YHat.length - 1] + "','" + residuals[residuals.length - 1] + "','"
-							+ allAssetPricesMappingBasic.get(majorKey).get(Date.valueOf(priceComputeTill)).closePrice
+							+ allAssetPricesMappingBasic.get(majorKey).get(Date.valueOf(priceComputedTill)).closePrice
 							+ "','" + String.format("%1$,.2f", priceToEstimateDeviation).concat("%") + "','"
 							+ priceToEstimateDeviation + "'");
 		} else {
-			while (allAssetPricesMappingBasic.get(majorKey).get(Date.valueOf(priceComputeTill.minusDays(i))) == null) {
+			while (allAssetPricesMappingBasic.get(majorKey).get(Date.valueOf(priceComputedTill.minusDays(i))) == null) {
 				i++;
 			}
 			priceToEstimateDeviation = (residuals[residuals.length - 1]) / allAssetPricesMappingBasic.get(majorKey)
-					.get(Date.valueOf(priceComputeTill.minusDays(i))).closePrice * 100;
+					.get(Date.valueOf(priceComputedTill.minusDays(i))).closePrice * 100;
 			deviationAssertion = deviationAssertion
 					.concat("'" + YHat[YHat.length - 1] + "','" + residuals[residuals.length - 1] + "','"
 							+ allAssetPricesMappingBasic.get(majorKey)
-									.get(Date.valueOf(priceComputeTill.minusDays(i))).closePrice
+									.get(Date.valueOf(priceComputedTill.minusDays(i))).closePrice
 							+ "','" + String.format("%1$,.2f", priceToEstimateDeviation).concat("%") + "','"
 							+ priceToEstimateDeviation + "'");
 		}
 
-		if ((Date.valueOf(priceComputeTill)).after(maxDateInDailySnapshot)) {
+		if ((Date.valueOf(priceComputedTill)).after(maxDateInDailySnapshot)) {
 			deviationAssertion = deviationAssertion.concat(",'Y');");
 		} else {
 			deviationAssertion = deviationAssertion.concat(");");
 		}
 
 		try {
-			System.out.println("deviationAssertion: " + deviationAssertion);
+			System.out.println("correlation matrix routine: deviationAssertion: " + deviationAssertion);
 			stmt.executeQuery(deviationAssertion);
-			System.out.println(majorKey + " inserted.");
+			System.out.println("correlation matrix routine: " + majorKey + " inserted.");
 		} catch (SQLException e) {
 			e.printStackTrace();
 		}
 	}
 
 	public void run() {
-		int i = 0;
-		ResultSet rs;
-		String asset = new String();
-		System.out.println(this.getName() + ": new correlation matrix is running...");
+		System.out.println("correlation matrix routine: " + this.getName() + ": new correlation matrix is running...");
 		/*
 		 * try { Thread.sleep(1000); } catch (InterruptedException e) {
 		 * e.printStackTrace(); }
@@ -329,34 +328,38 @@ public class CorrelationMatrix extends Thread {
 				if (majorKey != null) {
 					for (String minorKey : allAssetPricesMappingBasic.keySet()) {
 						if (minorKey != null) {
-							corr = CorrelationMatrix.computeCorrelation(minorKey, majorKey, priceComputeTill,
+							corr = CorrelationMatrix.computeCorrelation(minorKey, majorKey, priceComputedTill,
 									"pearson");
 							minorMap.put(minorKey, corr);
 						}
 					}
 					correlationMatrix.put(majorKey, minorMap);
 					try {
-						perserveCorrelationMatrix(majorKey, minorMap, priceComputeTill);
+						perserveCorrelationMatrix(majorKey, minorMap, priceComputedTill);
 					} catch (org.apache.commons.math3.linear.SingularMatrixException singularEx) {
-						System.out.println("SingularMatrixException thrown on asset " + majorKey);
+						System.out.println(
+								"correlation matrix routine: SingularMatrixException thrown on asset " + majorKey);
 						continue;
 					} catch (org.apache.commons.math3.exception.NoDataException noDataEx) {
-						System.out.println(
-								"NoDataException thrown on asset " + majorKey + ", might be newly issued asset. ");
+						System.out.println("correlation matrix routine: NoDataException thrown on asset " + majorKey
+								+ ", might be newly issued asset. ");
 						continue;
 					} catch (org.apache.commons.math3.exception.MathIllegalArgumentException illegalArgumentEx) {
-						System.out.println("MathIllegalArgumentException thrown on asset " + majorKey + ", being "
-								+ illegalArgumentEx.getStackTrace());
-						System.out.println("Might be newly issued asset. ");
+						System.out.println(
+								"correlation matrix routine: correlation matrix routine: MathIllegalArgumentException thrown on asset "
+										+ majorKey + ", being " + illegalArgumentEx.getStackTrace());
+						System.out.println("correlation matrix routine: Might be newly issued asset. ");
 						continue;
 					} catch (Exception ex) {
-						System.out.println(ex.getCause() + " exception occurred, continue to next asset.");
+						System.out.println("correlation matrix routine: " + ex.getCause()
+								+ " exception occurred, continue to next asset.");
 						continue;
 					}
 				}
 			}
 		}
-		System.out.println(this.getName() + ": correlation matrix computation finished...");
+		System.out.println(
+				"correlation matrix routine: " + this.getName() + ": correlation matrix computation finished...");
 		/*
 		 * if (CorrelationMatrix.gaugePerformanceOnly == true) { File file = new
 		 * File("/Users/pengzhou/Desktop/out/dense_assets_report_" + LocalDateTime.now()
@@ -404,118 +407,136 @@ public class CorrelationMatrix extends Thread {
 	}
 
 	public static void main(String args[]) {
-
 		LocalDateTime startDT = LocalDateTime.now();
 		new CorrelationMatrix();
 		ResultSet rs;
 		String asset = null;
 		LocalDate priceStart = LocalDate.of(2024, 1, 1);
 		LocalDate priceTill = LocalDate.now();
-
+		CorrelationMatrix[] threads = null;
 		priceDateRange = ThruBreaker.setPriceDateRange(priceStart, priceTill);
-		// for (LocalDate d : priceDateRange) {
-		// if (d.isAfter(LocalDate.of(2024, 8, 1)) && d.isBefore(LocalDate.of(2024, 9,
-		// 16))) {
-		if (computeEstimatesOnTheFly == true) {
-			priceComputeTill = LocalDate.now();
-		} else {
-			// priceComputeTill = d;
-			priceComputeTill = LocalDate.of(2024, 9, 11);
-		}
+		allAssetPricesMappingBasic = ThruBreaker.setAllAssetPricesMappingBasic(priceStart, priceTill,
+				ThruBreaker.conn, stmt);
+		for (LocalDate d : priceDateRange) {
+			if (d.isAfter(LocalDate.of(2024, 11, 19)) && !d.isAfter(LocalDate.now())) {
 
-		String selectmaxDateInDailySnapshot = "select max(交易日期) as maxDate from daily_snapshot;";
-		maxDateInDailySnapshot = null;
-		ResultSet rs_maxDate;
-		try {
-			rs_maxDate = stmt.executeQuery(selectmaxDateInDailySnapshot);
-			while (rs_maxDate.next()) {
-				maxDateInDailySnapshot = rs_maxDate.getDate("maxDate");
-			}
-		} catch (SQLException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		}
-
-		int i = 0, j = 0;
-		if (gaugePerformanceOnly == false) {
-			allAssetPricesMappingBasic = ThruBreaker.setAllAssetPricesMappingBasic(priceStart, priceTill,
-					ThruBreaker.conn, stmt);
-
-			ArrayList<String>[] piles = new ArrayList[noOfPiles];
-			toExclude = new LinkedList<String>();
-			try {
-				String deleteExistingInTheFlyEstimates = "delete from matrix_correlation where realtime='Y';";
-				stmt.executeQuery(deleteExistingInTheFlyEstimates);
-				String toExcludeAssets = "select * from matrix_correlation where computing_date='"
-						+ priceComputeTill.toString() + "'";
-
-				rs = stmt.executeQuery(toExcludeAssets);
-				while (rs.next()) {
-					asset = rs.getString("asset");
-					toExclude.add(asset);
+				if (computeEstimatesOnTheFly == true) {
+					priceComputedTill = LocalDate.now();
+				} else {
+					priceComputedTill = d;
+					// priceComputedTill = LocalDate.of(2024, 11, 19);
 				}
 
-				if ((Date.valueOf(priceComputeTill)).after(maxDateInDailySnapshot)
-						&& computeEstimatesOnTheFly == false) {
-					Date realtimeTradeDate = new java.sql.Date(-1);// to initialize a java.sql.Date as 1970/01/01
-																	// (realtimeprice table's trade_date non-null
-																	// check).
+				String selectmaxDateInDailySnapshot = "select max(交易日期) as maxDate from daily_snapshot;";
+				maxDateInDailySnapshot = null;
+				ResultSet rs_maxDate;
+				try {
+					rs_maxDate = stmt.executeQuery(selectmaxDateInDailySnapshot);
+					while (rs_maxDate.next()) {
+						maxDateInDailySnapshot = rs_maxDate.getDate("maxDate");
+					}
+				} catch (SQLException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				}
 
-					String checkRealtimePriceTradeDate = "select max(trade_date) max_trade_date from realtimeprice;";
-					String onTheFlyEstimatingAssetsSql = "select distinct asset from matrix_correlation where price_estimate_deviation_numeric<='"
-							+ deviationThreshold + "' and computing_date>='2024-10-01'";
+				int i = 0, j = 0;
+				if (gaugePerformanceOnly == false) {
+					ArrayList<String>[] piles = new ArrayList[noOfPiles];
+					toExclude = new LinkedList<String>();
 					try {
-						rs = stmt.executeQuery(checkRealtimePriceTradeDate);
-						while (rs.next()) {
-							realtimeTradeDate = rs.getDate("max_trade_date");
-						}
-						if (!priceComputeTill.isBefore(realtimeTradeDate.toLocalDate())) {
-							System.out.println("valid realtime-price data, proceed on-the-fly estimating...");
-						} else {
-							System.out.println("invalid realtime-price data, exit on-the-fly estimating...");
-							return;
-						}
-						rs = stmt.executeQuery(onTheFlyEstimatingAssetsSql);
-						onTheFlyEstimatingAssets = new LinkedList<String>();
+						String deleteExistingInTheFlyEstimates = "delete from matrix_correlation where realtime='Y';";
+						stmt.executeQuery(deleteExistingInTheFlyEstimates);
+						String toExcludeAssets = "select * from matrix_correlation where computing_date='"
+								+ priceComputedTill.toString() + "'";
+
+						rs = stmt.executeQuery(toExcludeAssets);
 						while (rs.next()) {
 							asset = rs.getString("asset");
-							onTheFlyEstimatingAssets.add(asset);
+							toExclude.add(asset);
+						}
+
+						if ((Date.valueOf(priceComputedTill)).after(maxDateInDailySnapshot)
+								&& computeEstimatesOnTheFly == false) {
+							Date realtimeTradeDate = new java.sql.Date(-1);// to initialize a java.sql.Date as
+																			// 1970/01/01
+																			// (realtimeprice table's trade_date
+																			// non-null
+																			// check).
+
+							String checkRealtimePriceTradeDate = "select max(trade_date) max_trade_date from realtimeprice;";
+							String onTheFlyEstimatingAssetsSql = "select distinct asset from matrix_correlation where price_estimate_deviation_numeric<='"
+									+ deviationThreshold + "' and computing_date>='2024-10-01'";
+							try {
+								rs = stmt.executeQuery(checkRealtimePriceTradeDate);
+								while (rs.next()) {
+									realtimeTradeDate = rs.getDate("max_trade_date");
+								}
+								if (!priceComputedTill.isBefore(realtimeTradeDate.toLocalDate())) {
+									System.out.println(
+											"correlation matrix routine: valid realtime-price data, proceed on-the-fly estimating...");
+								} else {
+									System.out.println(
+											"correlation matrix routine: invalid realtime-price data, exit on-the-fly estimating...");
+									return;
+								}
+								rs = stmt.executeQuery(onTheFlyEstimatingAssetsSql);
+								onTheFlyEstimatingAssets = new LinkedList<String>();
+								while (rs.next()) {
+									asset = rs.getString("asset");
+									onTheFlyEstimatingAssets.add(asset);
+								}
+							} catch (SQLException e) {
+								// TODO Auto-generated catch block
+								e.printStackTrace();
+							}
+							for (String majorKey : onTheFlyEstimatingAssets) {
+								if (i % Math.ceil(onTheFlyEstimatingAssets.size() / noOfPiles + 1) == 0) {
+									List<String> assetPile = new ArrayList<String>();
+									piles[j] = (ArrayList<String>) assetPile;
+									j++;
+								}
+								piles[j - 1].add(majorKey);
+								i++;
+							}
+						} else {
+							for (String majorKey : allAssetPricesMappingBasic.keySet()) {
+								if (i % Math.ceil(allAssetPricesMappingBasic.keySet().size() / noOfPiles + 1) == 0) {
+									List<String> assetPile = new ArrayList<String>();
+									piles[j] = (ArrayList<String>) assetPile;
+									j++;
+								}
+								piles[j - 1].add(majorKey);
+								i++;
+							}
 						}
 					} catch (SQLException e) {
 						// TODO Auto-generated catch block
 						e.printStackTrace();
 					}
-					for (String majorKey : onTheFlyEstimatingAssets) {
-						if (i % Math.ceil(onTheFlyEstimatingAssets.size() / noOfPiles + 1) == 0) {
-							List<String> assetPile = new ArrayList<String>();
-							piles[j] = (ArrayList<String>) assetPile;
-							j++;
-						}
-						piles[j - 1].add(majorKey);
-						i++;
-					}
-				} else {
-					for (String majorKey : allAssetPricesMappingBasic.keySet()) {
-						if (i % Math.ceil(allAssetPricesMappingBasic.keySet().size() / noOfPiles + 1) == 0) {
-							List<String> assetPile = new ArrayList<String>();
-							piles[j] = (ArrayList<String>) assetPile;
-							j++;
-						}
-						piles[j - 1].add(majorKey);
-						i++;
+
+					threads = new CorrelationMatrix[piles.length];
+					for (int pileIndex = 0; pileIndex < piles.length; pileIndex++) {
+						CorrelationMatrix cm = new CorrelationMatrix(piles[pileIndex], priceComputedTill);
+						threads[pileIndex] = cm;
+						cm.start();
 					}
 				}
-			} catch (SQLException e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
-			}
-			for (int pileIndex = 0; pileIndex < piles.length; pileIndex++) {
-				CorrelationMatrix cm = new CorrelationMatrix(piles[pileIndex], priceComputeTill, toExclude);
-				cm.start();
+
+				int livingThreads;
+				while (true) {
+					livingThreads = 0;
+					for (j = 0; j < threads.length; j++) {
+						livingThreads += (threads[j].isAlive() ? 1 : 0);
+					}
+					if (livingThreads == 0) {
+						break;
+					}
+				}
+				LocalDateTime endDT = LocalDateTime.now();
+				System.out.println("correlation matrix routine: Ending correlation computing at " + endDT + ", cost "
+						+ startDT.until(endDT, ChronoUnit.SECONDS) + " seconds.");
 			}
 		}
-		LocalDateTime endDT = LocalDateTime.now();
-		System.out.println("Ending correlation computing at " + endDT + ", cost "
-				+ startDT.until(endDT, ChronoUnit.SECONDS) + " seconds.");
 	}
 }

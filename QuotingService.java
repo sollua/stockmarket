@@ -8,14 +8,11 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
-import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.util.HashMap;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.ListIterator;
 import java.util.Map;
@@ -37,56 +34,18 @@ public class QuotingService extends Thread {
 	static int runControlCount=0;
 	java.util.Date currentDate = Date.from(LocalDate.now().atStartOfDay(ZoneId.systemDefault()).toInstant());
 	URL url, url_listing;
-
-	static List<LocalDate> setPriceDateRange(LocalDate priceStart, LocalDate priceEnd) {
-		priceDateRange = new LinkedList<LocalDate>();
-		LocalDate tail;
-		List<LocalDate> exchangeHolidays = new LinkedList<LocalDate>();
-		exchangeHolidays.add(LocalDate.of(2024, 01, 01));
-		exchangeHolidays.add(LocalDate.of(2024, 02, 9));
-		exchangeHolidays.add(LocalDate.of(2024, 02, 12));
-		exchangeHolidays.add(LocalDate.of(2024, 02, 13));
-		exchangeHolidays.add(LocalDate.of(2024, 02, 14));
-		exchangeHolidays.add(LocalDate.of(2024, 02, 15));
-		exchangeHolidays.add(LocalDate.of(2024, 02, 16));
-		exchangeHolidays.add(LocalDate.of(2024, 04, 04));
-		exchangeHolidays.add(LocalDate.of(2024, 04, 05));
-		exchangeHolidays.add(LocalDate.of(2024, 05, 01));
-		exchangeHolidays.add(LocalDate.of(2024, 05, 02));
-		exchangeHolidays.add(LocalDate.of(2024, 05, 03));
-		exchangeHolidays.add(LocalDate.of(2024, 06, 10));
-		exchangeHolidays.add(LocalDate.of(2024, 9, 16));
-		exchangeHolidays.add(LocalDate.of(2024, 9, 17));
-		exchangeHolidays.add(LocalDate.of(2024, 10, 1));
-		exchangeHolidays.add(LocalDate.of(2024, 10, 2));
-		exchangeHolidays.add(LocalDate.of(2024, 10, 3));
-		exchangeHolidays.add(LocalDate.of(2024, 10, 4));
-		exchangeHolidays.add(LocalDate.of(2024, 10, 7));
-		tail = priceStart;
-		priceDateRange.add(priceStart);
-		while (tail.isBefore(priceEnd)) {
-			tail = tail.plusDays(1);
-			if (!(tail.getDayOfWeek().equals(DayOfWeek.SATURDAY) || tail.getDayOfWeek().equals(DayOfWeek.SUNDAY)
-					|| exchangeHolidays.contains(tail)))
-				priceDateRange.add(tail);
-		}
-		System.out.println("priceDateRange date range is: ");
-		ListIterator<LocalDate> iter = priceDateRange.listIterator();
-		while (iter.hasNext())
-			System.out.println(iter.next());
-		return priceDateRange;
-	}
-
+	
 	static Map<String, String> shortToLong(Statement stmt) {
-		String selectLongCodes = "select distinct 股票代码 from daily_snapshot where is_index!='Y';";
+		String selectLongCodes = "select distinct stock_code, stock_name, exchange from listing;";
 		ResultSet rs;
 		longForms = new HashMap<String, String>();
-		String longCode;
+		String shortCode, exchange;
 		try {
 			rs = stmt.executeQuery(selectLongCodes);
 			while (rs.next()) {
-				longCode = rs.getString("股票代码");
-				longForms.put(longCode.substring(2), longCode);
+				shortCode = rs.getString("stock_code");
+				exchange = rs.getString("exchange");
+				longForms.put(shortCode, exchange.concat(shortCode));
 			}
 		} catch (SQLException e) {
 			// TODO Auto-generated catch block
@@ -104,24 +63,24 @@ public class QuotingService extends Thread {
 		} catch (Exception excp) {
 			excp.printStackTrace();
 		}
-		priceDateRange = setPriceDateRange(priceStart, priceTill);
+		priceDateRange = ThruBreaker.setPriceDateRange(priceStart, priceTill);
 		shortToLong(stmt);
 	}
 
 	public void run() {
 		while (true) {
-			if (LocalDateTime.now().isAfter(startDT.plusMinutes(1)) || runControlCount==0) {
+			if (LocalDateTime.now().isAfter(startDT.plusMinutes(1).plusSeconds(15)) || runControlCount==0) {
 				try {
 					runControlCount++;
 					startDT = LocalDateTime.now();
-					System.out.println("Starting realtime Quoting at: " + startDT);
-					url = new URL("http://a.mairui.club/hsrl/ssjy/all/cd5268626606b8b4ef");
-					url_listing = new URL("http://api.mairui.club/hslt/list/cd5268626606b8b4ef");
+					System.out.println("quoting service("+LocalDateTime.now()+"): Starting realtime Quoting at: " + startDT);
+					url = new URL("http://a.mairuiapi.com/hsrl/ssjy/all/cd5268626606b8b4ef");
+					url_listing = new URL("http://api.mairuiapi.com/hslt/list/cd5268626606b8b4ef");
 					String jsonStr = IOUtils.toString(url, "UTF-8");
 					jsonStr = jsonStr.replaceAll("\"", "");
 					String regex = "[\\}]";
 					String[] ssss = jsonStr.split(regex);
-					System.out.println("Finished price quoting HTTP streaming at: " + LocalDateTime.now());
+					System.out.println("quoting service("+LocalDateTime.now()+"): Finished price quoting HTTP streaming at: " + LocalDateTime.now());
 					
 					for (int i = 0; i < ssss.length - 1; i++) {
 						ssss[i] = ssss[i].substring(2);
@@ -139,7 +98,6 @@ public class QuotingService extends Thread {
 						for (int j = 0; j < priceDetails.length; j++) {
 							if (priceDetails[j].split(":")[0].equals("t")) {
 								ld = LocalDate.parse(priceDetails[j].split(":")[1].substring(0, 10));
-								
 								continue;
 							}
 							if (priceDetails[j].split(":")[0].equals("dm")) {
@@ -162,10 +120,10 @@ public class QuotingService extends Thread {
 								}
 							}
 						}
-						as.tradeDate = java.sql.Date.valueOf(ld);
+						as.tradeDate = java.util.Date.from(ld.atStartOfDay(ZoneId.systemDefault()).toInstant());
 						as.stockCode = longForms.get(as.stockCode);
-						System.out.println("股票代码: " + as.stockCode);
-						System.out.println("交易日期: " + java.sql.Date.valueOf(ld));
+						System.out.println("quoting service("+LocalDateTime.now()+"): 股票代码: " + as.stockCode);
+						System.out.println("quoting service("+LocalDateTime.now()+"): 交易日期: " + java.sql.Date.valueOf(ld));
 						as.openPrice = priceMap.get("o"); as.closePrice = priceMap.get("p");
 						as.highPrice = priceMap.get("h"); as.lowPrice = priceMap.get("l");
 						as.amountShares = priceMap.get("v"); as.amountDollars = priceMap.get("cje");
@@ -173,7 +131,7 @@ public class QuotingService extends Thread {
 						as.speed = priceMap.get("zs");
 						as.totalMarketValue = priceMap.get("sz"); 
 						preparedStmt.setString(1, as.stockCode);
-						preparedStmt.setDate(2, as.tradeDate);
+						preparedStmt.setDate(2, new java.sql.Date(as.tradeDate.getTime()));
 						preparedStmt.setFloat(3, as.openPrice);
 						preparedStmt.setFloat(4, as.closePrice);
 						preparedStmt.setFloat(5, as.highPrice);
@@ -198,7 +156,7 @@ public class QuotingService extends Thread {
 					jsonStr = jsonStr.replaceAll("\"", "");
 					regex = "[\\}]";
 					ssss = jsonStr.split(regex);
-					System.out.println("Finished listing HTTP streaming at: " + LocalDateTime.now());
+					System.out.println("listing service("+LocalDateTime.now()+"): Finished listing HTTP streaming at: " + LocalDateTime.now());
 					for (int i = 0; i < ssss.length - 1; i++) {
 						ssss[i] = ssss[i].substring(2);
 					}
@@ -220,8 +178,8 @@ public class QuotingService extends Thread {
 								as.exchange = String.valueOf(listingDetails[j].split(":")[1]);
 							}
 						}
-						System.out.println("股票代码: " + as.stockCode);
-						System.out.println("股票名称: " + as.stockName);
+						System.out.println("listing service("+LocalDateTime.now()+"): 股票代码: " + as.stockCode);
+						System.out.println("listing service("+LocalDateTime.now()+"): 股票名称: " + as.stockName);
 						preparedStmt2.setString(1, as.stockCode);
 						preparedStmt2.setString(2, as.stockName);
 						preparedStmt2.setString(3, as.exchange);
@@ -237,11 +195,13 @@ public class QuotingService extends Thread {
 					conn.setAutoCommit(true);
 
 					LocalDateTime endDT = LocalDateTime.now();
-					System.out.println("Ending realtime quoting and reading listig at " + endDT + ", cost "
+					System.out.println("quoting serive("+LocalDateTime.now()+"): Ending realtime quoting and listig at " + endDT + ", cost "
 							+ startDT.until(endDT, ChronoUnit.SECONDS) + " seconds.");
 					// Thread.sleep(30000);
+					
 				} catch (Exception ex) {
 					ex.printStackTrace();
+					System.out.println("CHECK THE STATUS OF VPN. TURN OFF VPN.");
 				}
 			}
 		}

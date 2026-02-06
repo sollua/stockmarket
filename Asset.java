@@ -43,7 +43,6 @@ import org.apache.commons.math3.stat.descriptive.DescriptiveStatistics;
 import org.apache.commons.math3.stat.correlation.PearsonsCorrelation;
 import org.apache.commons.math3.stat.correlation.KendallsCorrelation;
 
-
 import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.URL;
@@ -80,21 +79,23 @@ public class Asset extends Thread {
 	static final String PASS = "";
 	static BlockingQueue<String> bq = new ArrayBlockingQueue<String>(1000);
 	static BlockingQueue<String> bq_code_only = new ArrayBlockingQueue<String>(1000);
-	Statement stmt;
-	Connection conn;
+	static Statement stmt;
+	static Connection conn;
 	Map<String, Map<Date, PriceNDesc[]>> allAssetListPricesMapping;
 
 	{
 		try {
-			// STEP 2: Register JDBC driver
-			Class.forName(JDBC_DRIVER);
-			conn = DriverManager.getConnection(
-					"jdbc:mariadb://localhost:20/mysql?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai",
-					"root", "");
-			// STEP 4: Execute a query
-			stmt = conn.createStatement();
-			System.out.println("conn: " + conn);
-			System.out.println("stmt: " + stmt);
+			if (conn == null) {
+				// STEP 2: Register JDBC driver
+				Class.forName(JDBC_DRIVER);
+				conn = DriverManager.getConnection(
+						"jdbc:mariadb://localhost:20/mysql?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai",
+						"root", "");
+				// STEP 4: Execute a query
+				stmt = conn.createStatement();
+				System.out.println("conn: " + conn);
+				System.out.println("stmt: " + stmt);
+			}
 		} catch (SQLException se) {
 			se.printStackTrace();
 		} catch (Exception e) {
@@ -123,9 +124,11 @@ public class Asset extends Thread {
 	boolean inPortfolio, offPortfolio, bought, sold, gainOrLoss;
 	int continousRising, continousFalling;
 
-	 Map<String, Map<Date, PriceNDesc[]>> setAllAssetListPricesMapping(LocalDate start, Connection conn, Statement stmt) {
-		String select_all_assets = "select * from daily_snapshot where 交易日期 >='" + start +"'  and (is_index='N' or is_index is null)";
-		
+	Map<String, Map<Date, PriceNDesc[]>> setAllAssetListPricesMapping(LocalDate start, Connection conn,
+			Statement stmt) {
+		String select_all_assets = "select * from daily_snapshot where 交易日期 >='" + start
+				+ "'  and (is_index='N' or is_index is null)";
+
 		System.out.println("select_all_assets: " + select_all_assets);
 		Date selectDate, tradeDate;
 		ResultSet rs;
@@ -135,13 +138,13 @@ public class Asset extends Thread {
 		PriceNDesc[] priceAndDesc;
 		double totalMarketValue, changeRate;
 		// double liquidMarketValue;
-		
+
 		Map<Date, PriceNDesc[]> assetPricesMap = null;
 		try {
 			rs = stmt.executeQuery(select_all_assets);
 			while (rs.next()) {
 				priceAndDesc = new PriceNDesc[12];
-				//selectDate = rs.getDate("select_date");
+				// selectDate = rs.getDate("select_date");
 				tradeDate = rs.getDate("交易日期");
 				stockCode = rs.getString("股票代码").substring(2);
 				openPrice = rs.getFloat("开盘价");
@@ -154,7 +157,7 @@ public class Asset extends Thread {
 				MA_10 = rs.getFloat("MA_10");
 				MA_20 = rs.getFloat("MA_20");
 				MA_30 = rs.getFloat("MA_30");
-				//MA_60 = rs.getFloat("MA_60");
+				// MA_60 = rs.getFloat("MA_60");
 				changeRate = rs.getDouble("涨跌幅");
 				totalMarketValue = rs.getDouble("总市值");
 				// liquidMarketValue = rs.getDouble("流通市值");
@@ -176,21 +179,21 @@ public class Asset extends Thread {
 				priceAndDesc[7] = new PriceNDesc(MA_10, rising, falling, totalMarketValue);
 				priceAndDesc[8] = new PriceNDesc(MA_20, rising, falling, totalMarketValue);
 				priceAndDesc[9] = new PriceNDesc(MA_30, rising, falling, totalMarketValue);
-				//priceAndDesc[10] = new PriceNDesc(MA_60, rising, falling, totalMarketValue);
+				// priceAndDesc[10] = new PriceNDesc(MA_60, rising, falling, totalMarketValue);
 				priceAndDesc[11] = new PriceNDesc(0, rising, falling, totalMarketValue);
 				if (allAssetListPricesMapping == null) {
 					allAssetListPricesMapping = new HashMap<String, Map<Date, PriceNDesc[]>>();
 				}
 
-					if (allAssetListPricesMapping.containsKey(stockCode)) {
-						assetPricesMap = allAssetListPricesMapping.get(stockCode);
-						assetPricesMap.putIfAbsent(tradeDate, priceAndDesc);
-					} else {
-						assetPricesMap = new HashMap<Date, PriceNDesc[]>();
-						assetPricesMap.put(tradeDate, priceAndDesc);
-					}
-					allAssetListPricesMapping.putIfAbsent(stockCode, assetPricesMap);
+				if (allAssetListPricesMapping.containsKey(stockCode)) {
+					assetPricesMap = allAssetListPricesMapping.get(stockCode);
+					assetPricesMap.putIfAbsent(tradeDate, priceAndDesc);
+				} else {
+					assetPricesMap = new HashMap<Date, PriceNDesc[]>();
+					assetPricesMap.put(tradeDate, priceAndDesc);
 				}
+				allAssetListPricesMapping.putIfAbsent(stockCode, assetPricesMap);
+			}
 		} catch (SQLException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
@@ -232,6 +235,7 @@ public class Asset extends Thread {
 
 	float cost, sellPrice, buyPrice;
 	double assetRealizedGainLoss, revenue, assetUnrealizedGainLoss, assetChange;
+	public String notes;
 
 	public float getGainSpeed(LocalDate priceDate, String openOrClose) {
 		assetChange = getAssetUnrealizedChange(priceDate, openOrClose, conn, stmt);
@@ -271,7 +275,8 @@ public class Asset extends Thread {
 
 	@Override
 	public int hashCode() {
-		// use a prime number and the hash codes of the fields to generate a unique hash code
+		// use a prime number and the hash codes of the fields to generate a unique hash
+		// code
 		return 11 * this.stockCode.hashCode();
 	}
 
@@ -514,7 +519,6 @@ public class Asset extends Thread {
 		return assetChange;
 	};
 
-	
 	public static Map[] findRebound(LocalDate since, LocalDate till, LocalDate anchor, double threshold,
 			boolean enRouteNoMatter, DescendingDateOrder comparator, Connection conn, Statement stmt) {
 		Date dateOfTrade = new Date();
@@ -789,11 +793,11 @@ public class Asset extends Thread {
 						System.out.println("\"" + (String) i + "\",");
 						String fill_out_report = "insert into rebound_report (stock_code, stock_name, status, report, signifying_date, "
 								+ "signifying_threshold, open_after_signifying, detail, start,till) " + "values ('"
-								+ ((String) i).split("\\|")[0] + "', '" + ((String) i).split("\\|")[1]+ "', '"
+								+ ((String) i).split("\\|")[0] + "', '" + ((String) i).split("\\|")[1] + "', '"
 								+ ((String) i).split("\\|")[2] + "', '" + ((String) i).split("\\|")[3] + "', '"
 								+ ((String) i).split("\\|")[4] + "', '" + threshold + "','"
-								+ ((String) i).split("\\|")[5]+ "','" + ((String) i).split("\\|")[6]
-								+ "','" + since + "','" + till + "')";
+								+ ((String) i).split("\\|")[5] + "','" + ((String) i).split("\\|")[6] + "','" + since
+								+ "','" + till + "')";
 						stmt.executeUpdate(fill_out_report);
 					}
 				}
@@ -852,8 +856,8 @@ public class Asset extends Thread {
 		return maps;
 	}
 
-	public static Map<Asset, List<Asset>> tracingUps(LocalDate beginning, long watchWindow,
-			 Connection conn, Statement stmt) {
+	public static Map<Asset, List<Asset>> tracingUps(LocalDate beginning, long watchWindow, Connection conn,
+			Statement stmt) {
 		Map<Asset, List<Asset>> watchDog = new HashMap<Asset, List<Asset>>();
 		LocalDate end = beginning.plusDays(watchWindow);
 		String get_ups_sql = "select 股票代码, 股票名称, 交易日期, 涨跌幅, 开盘价,收盘价, MA_5, MA_10 from daily_snapshot where 交易日期 > '"
@@ -953,7 +957,7 @@ public class Asset extends Thread {
 		Date previousDate;
 		ZoneId defaultZoneId = ZoneId.systemDefault();
 		Date investigation = Date.from(investigationDate.atStartOfDay(defaultZoneId).toInstant());
-        
+
 		List<String> riseNshrunk = new ArrayList<String>();
 
 		for (Entry<String, Map<Date, PriceNDesc[]>> e : allAssetListPricesMapping.entrySet()) {
@@ -961,35 +965,34 @@ public class Asset extends Thread {
 
 			Map<Date, PriceNDesc[]> em = e.getValue();
 			Collection<PriceNDesc[]> a = em.values();
-			int j,k=0;
+			int j, k = 0;
 			PriceNDesc[][] aa = new PriceNDesc[a.size()][12];
-			
-			for(PriceNDesc[] emi: a){
-				for ( j = 0;  j < 12; j++) {
-				aa[k][j] = emi[j];
+
+			for (PriceNDesc[] emi : a) {
+				for (j = 0; j < 12; j++) {
+					aa[k][j] = emi[j];
 				}
 				k++;
 			}
 
-			for ( j = 0; j < aa.length; j++) {
+			for (j = 0; j < aa.length; j++) {
 				amountSharesList.add(Float.valueOf(aa[j][4].getPrice()));
 			}
 
 			double[] initialDoubleArray = new double[aa.length];
 
-			for ( j = 0; j < aa.length; j++) {
+			for (j = 0; j < aa.length; j++) {
 				initialDoubleArray[j] = aa[j][4].getPrice();
 				amountSharesList.add(Float.valueOf(aa[j][4].getPrice()));
 			}
 
 			ds = new DescriptiveStatistics(initialDoubleArray);
 
-			/*for ( j = 0; j < aa.length; j++) {
-				amountShares = (float) aa[j][4].getPrice();
-				percentile = ds.getPercentile(amountShares);
-				aa[j][11].setPrice((float) percentile);
-			}
-			*/
+			/*
+			 * for ( j = 0; j < aa.length; j++) { amountShares = (float)
+			 * aa[j][4].getPrice(); percentile = ds.getPercentile(amountShares);
+			 * aa[j][11].setPrice((float) percentile); }
+			 */
 
 			dateSet = em.keySet();
 			for (Date di : dateSet) {
@@ -1002,26 +1005,23 @@ public class Asset extends Thread {
 
 			previousDate = dateList.get(indexOfDate + 1);
 
-			
 			try {
-			lastAmountShares = em.get(previousDate)[4].getPrice();
-			thisAmountShares = em.get(investigation)[4].getPrice();
-			if (lastAmountShares > 2 * thisAmountShares) {
-				riseNshrunk.add(e.getKey());
-			}
-			}
-			catch(Exception ex) {
+				lastAmountShares = em.get(previousDate)[4].getPrice();
+				thisAmountShares = em.get(investigation)[4].getPrice();
+				if (lastAmountShares > 2 * thisAmountShares) {
+					riseNshrunk.add(e.getKey());
+				}
+			} catch (Exception ex) {
 				ex.printStackTrace();
 			}
 		}
-		
-		for (String rns: riseNshrunk) {
-			System.out.println("found stock: "+rns);
+
+		for (String rns : riseNshrunk) {
+			System.out.println("found stock: " + rns);
 		}
 		return riseNshrunk;
 	}
-	
-	
+
 	public void lowestPriceRegressing(LocalDate since, LocalDate till, int regressionSpan, double slopeThreshold,
 			String type) {
 		String stockCode, stockName;
@@ -1191,6 +1191,7 @@ public class Asset extends Thread {
 			bq_code_only.add(stockCode);
 		}
 	}
+
 	public void trend(double[] values, double slopeThreshold) {
 		SimpleRegression regression = new SimpleRegression();
 		int count = values.length;
@@ -1205,8 +1206,8 @@ public class Asset extends Thread {
 			}
 		}
 	}
-	
-	public double[] trend(double[] values) {
+
+	public double trend(double[] values, String param) {
 		SimpleRegression regression = new SimpleRegression();
 		int count = values.length;
 		for (int i = 0; i < count; i++) {
@@ -1214,16 +1215,21 @@ public class Asset extends Thread {
 		}
 		double slope = regression.getSlope();
 		double intercept = regression.getIntercept();
-		double[] r= {slope,intercept};
-		return r;
+		double[] r = { slope, intercept };
+		if (param.equals("slope")) {
+			return r[0];
+		} else if (param.equals("intecept")) {
+			return r[1];
+		} else
+			return r[0];
 	}
-	
+
 	public double mean(double[] values) {
 		DescriptiveStatistics ds = new DescriptiveStatistics(values);
 		double mean = ds.getMean();
 		return mean;
 	}
-	
+
 	public double[] trend(Double[] values) {
 		SimpleRegression regression = new SimpleRegression();
 		int count = values.length;
@@ -1232,10 +1238,10 @@ public class Asset extends Thread {
 		}
 		double slope = regression.getSlope();
 		double intercept = regression.getIntercept();
-		double[] r= {slope,intercept};
+		double[] r = { slope, intercept };
 		return r;
 	}
-	
+
 	public void flatTrend(double[] values, String stockCode, double range) {
 		SimpleRegression regression = new SimpleRegression();
 		int count = values.length;
@@ -1255,6 +1261,55 @@ public class Asset extends Thread {
 		}
 	}
 
+	public double standardizedVolatility(double[] values) {
+		double[] tmp = new double[values.length];
+		DescriptiveStatistics ds = new DescriptiveStatistics(values);
+		double mean = ds.getMean();
+		if (mean != 0) {
+			for (int i = 0; i < values.length; i++) {
+				tmp[i] = values[i] / mean;
+			}
+		} else {
+			for (int i = 0; i < values.length; i++) {
+				tmp[i] = 0;
+			}
+		}
+
+		DescriptiveStatistics ds1 = new DescriptiveStatistics(tmp);
+		double volatility = ds1.getStandardDeviation();
+		return volatility;
+	}
+
+	public double queryVolatility(java.util.Date date, String key, String volatilityStr, Statement stmt) {
+		String queryVolatility = "select volatility_60_standardized from volatility where stock_code='"+key+"'"+" and trade_date ='"+date+"'";
+		double volatility = 0;
+		try {
+			ResultSet rs = stmt.executeQuery(queryVolatility);
+		
+		while(rs.next()) {
+			volatility = rs.getDouble("volatilityStr");
+				volatility = rs.getDouble("volatility_60_standardized");
+		}
+		} catch (SQLException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+		return volatility;
+	}
+	
+	
+	public double numericVolatility(double[] values) {
+		double[] tmp = new double[values.length];
+		DescriptiveStatistics ds = new DescriptiveStatistics(values);
+		/*
+		 * double mean = ds.getMean(); for (int i =0; i < values.length; i++) { tmp[i] =
+		 * values[i] / mean; }
+		 * 
+		 * DescriptiveStatistics ds1 = new DescriptiveStatistics(tmp);
+		 */
+		double volatility = ds.getStandardDeviation();
+		return volatility;
+	}
 
 	public double PearsonCorrelation(double[] prices1, double[] prices2) {
 		PearsonsCorrelation pearson = new PearsonsCorrelation();
@@ -1265,7 +1320,7 @@ public class Asset extends Thread {
 		KendallsCorrelation kendall = new KendallsCorrelation();
 		return kendall.correlation(prices1, prices2);
 	}
-	
+
 	public static void firstDayRising(Date d, Date since, Date till, String window, Connection conn, Statement stmt) {
 		Date previousTradingDate = null, nextTradingDate = null;
 		List<String> rising = new LinkedList<String>(), previousRising = new LinkedList<String>(),
@@ -1468,11 +1523,11 @@ public class Asset extends Thread {
 		System.out.println("Start running thread: " + this.getName());
 		for (String s : stocks)
 			System.out.print(s + ", " + "\t");
-		
+
 		lowestPriceRegressing(since, till, upwardRegressionSpan, 0.015, "SIMPLE");
-		//setAllAssetListPricesMapping(since, conn, stmt);
-		//day_riseNShrink( investigationDate, 0, 0.0);
-		
+		// setAllAssetListPricesMapping(since, conn, stmt);
+		// day_riseNShrink( investigationDate, 0, 0.0);
+
 	}
 
 	public static void main(String args[]) throws InterruptedException {
@@ -1520,7 +1575,6 @@ public class Asset extends Thread {
 			while (bq_code_only_iterator.hasNext()) {
 				code_only = bq_code_only_iterator.next();
 				code_only_short = code_only.substring(2);
-				// System.out.println("\"" + code_only + "\",");
 				/*
 				 * 1、创业板 创业板的代码是300打头的股票代码；-- 2、沪市A股 沪市A股的代码是以600、601或603打头； 3、沪市B股
 				 * 沪市B股的代码是以900打头； 4、深市A股 深市A股的代码是以000打头；-- 5、中小板 中小板的代码是002打头； 6、深圳B股

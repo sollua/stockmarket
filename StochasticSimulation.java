@@ -135,7 +135,7 @@ public class StochasticSimulation {
 //		System.out.println("start findRebound time: " + startFindRebound);
 //		Map[] reboundAnalysisMaps=Asset.findRebound(since, till, anchor, 0.75, true,
 //		comparator, conn, stmt);
-		 Asset.tracingUps(since, 30, comparator, conn, stmt);
+		 //Asset.tracingUps(since, 30, comparator, conn, stmt);
 //		LocalDateTime endFindRebound = LocalDateTime.now();
 //		System.out.println("end findRebound time: " + endFindRebound);
 //		System.out.println("findRebound simulation duration: "
